@@ -1,0 +1,227 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator db {
+  provider = "go run github.com/steebchen/prisma-client-go"
+}
+
+model User {
+  id               Int       @id @default(autoincrement())
+  email            String    @unique
+  password         String?
+  firstName        String
+  state            StateEnum @default(FRESH)
+  lastName         String?
+  role             Role      @relation(fields: [roleId], references: [id])
+  roleId           Int
+  twoFactorEnabled Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  Product  Product[]
+  Category Category[]
+  Employee Employee?
+  Orders   Order[]
+  AuditLog AuditLog[]
+}
+
+enum StateEnum {
+  FRESH
+  VERIFIED
+  DISABLED
+  DELETED
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  permissions Json // Store permissions in a JSON format
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+}
+
+model Product {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String?
+  price       Float
+  stock       Int
+  categories  Category[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id])
+  userId      Int
+
+  inventory         Inventory?
+  orderItems        OrderItem[]
+  ProductOnCategory ProductOnCategory[]
+}
+
+model ProductOnCategory {
+  productId  Int
+  categoryId Int
+
+  product  Product  @relation(fields: [productId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([productId, categoryId])
+}
+
+model Category {
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  ProductOnCategory ProductOnCategory[]
+  productId         Int?
+  Product           Product?            @relation(fields: [productId], references: [id])
+  user              User                @relation(fields: [userId], references: [id])
+  userId            Int
+}
+
+model Inventory {
+  id        Int      @id @default(autoincrement())
+  product   Product  @relation(fields: [productId], references: [id])
+  productId Int      @unique
+  quantity  Int
+  location  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  warehouseId Int
+}
+
+model Warehouse {
+  id        Int         @id @default(autoincrement())
+  name      String
+  location  String
+  inventory Inventory[]
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  user        User        @relation(fields: [userId], references: [id])
+  userId      Int
+  totalAmount Float
+  status      OrderStatus
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  orderItems   OrderItem[]
+  transactions Transaction[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  order     Order   @relation(fields: [orderId], references: [id])
+  orderId   Int
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+  quantity  Int
+  price     Float
+}
+
+model Employee {
+  id                 Int                 @id @default(autoincrement())
+  user               User                @relation(fields: [userId], references: [id])
+  userId             Int                 @unique
+  department         Department          @relation(fields: [departmentId], references: [id])
+  departmentId       Int
+  position           String
+  salary             Float
+  hiredAt            DateTime
+  performanceReviews PerformanceReview[]
+  leaves             Leave[]
+
+  // Relations
+  payroll Payroll[]
+}
+
+model Department {
+  id        Int        @id @default(autoincrement())
+  name      String
+  employees Employee[]
+}
+
+model Payroll {
+  id         Int      @id @default(autoincrement())
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  salary     Float
+  bonuses    Float
+  deductions Float
+  paidAt     DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model PerformanceReview {
+  id         Int      @id @default(autoincrement())
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  reviewer   String
+  score      Int
+  feedback   String
+  reviewDate DateTime @default(now())
+}
+
+model Leave {
+  id         Int         @id @default(autoincrement())
+  employee   Employee    @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  startDate  DateTime
+  endDate    DateTime
+  reason     String
+  status     LeaveStatus @default(PENDING)
+}
+
+model Transaction {
+  id          Int           @id @default(autoincrement())
+  order       Order         @relation(fields: [orderId], references: [id])
+  orderId     Int
+  amount      Float
+  method      PaymentMethod
+  status      PaymentStatus
+  processedAt DateTime
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+enum OrderStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  PAYPAL
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
